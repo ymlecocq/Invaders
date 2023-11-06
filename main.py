@@ -34,6 +34,8 @@ start = False  # on a démarré le jeu ? Non
 score = 0
 level = 1
 
+player_x = 0    # variable globale qui enregistre la position du joueur sur l'axe X
+
 # --------------------------------------------------
 # Fonctions & classes pour charger les sprites
 # --------------------------------------------------
@@ -104,6 +106,10 @@ class Player(pygame.sprite.Sprite):
 
 
     def update(self):
+        global player_x
+
+        # on enregistre la position du joueur dans une variable globale
+        player_x = self.rect.x
 
         # Captation des touches du clavier
         pressed_keys = pygame.key.get_pressed()
@@ -113,23 +119,48 @@ class Player(pygame.sprite.Sprite):
         if pressed_keys[pygame.K_RIGHT]:    # press => : le joueur monte
             self.rect.x += self.velx
 
-#--------Stars-----------------------------------------------------------------------------------
-class Enemy(pygame.sprite.Sprite):
-    def __init__(self,name,posx,posy):
+
+#--------Tirs-----------------------------------------------------------------------------------
+class Tir(pygame.sprite.Sprite):
+    def __init__(self, posx, posy):
         super().__init__()
-        self.images = []
-        self.animationstep = [3]
-        self.width = stars_size_x
-        self.height = stars_size_y
-        self.imageslist = Load_sheet("Assets/"+name, self.animationstep, stars_size_x, stars_size_y)
-        self.rect = pygame.Rect(posx, posy, stars_size_x,stars_size_y)
+        self.image = pygame.Surface([10, 10])                       # sprite de 10*10 pixels
+        pygame.draw.rect(self.image, CYAN, pygame.Rect(0, 0,10,10)) # sprite de 10*10 pixels
+        self.rect = self.image.get_rect()
         self.rect.x = posx
         self.rect.y = posy
+
+    def update(self):
+        self.rect.y -= 5
+        if self.rect.y < 0:
+            self.kill()
+
+#--------Enemies-----------------------------------------------------------------------------------
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, posx, posy, numero):
+        super().__init__()
+        self.posx = posx
+        self.posy = posy
+        self.images = []
+        self.animationstep = [2]
+        self.width = sprite_size_x
+        self.height = sprite_size_y
+        self.imageslist = Load_sheet("Assets/enemy"+str(numero)+".png", self.animationstep, sprite_size_x, sprite_size_y)
+        self.rect = pygame.Rect(self.posx, self.posy, sprite_size_x, sprite_size_y)
+        self.rect.x = self.posx
+        self.rect.y = self.posy
         self.slowframe = 0
         self.frame = 0
-        self.frame_max = 3
+        self.frame_max = 2
         self.frame_min = 0
+        self.velx = 1
+        self.descente = False
+        self.descente_compteur = 0
 
+
+    def select_frame(self):
+        self.frame_min = 0
+        self.frame_max = 2
 
     def draw(self):
         self.slowframe += 1
@@ -140,7 +171,27 @@ class Enemy(pygame.sprite.Sprite):
                 self.frame = self.frame_min
         ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y))
 
-#---------------------------------------------------------------------------------------
+
+    def update(self):
+        if self.descente:                                       # Descente façon machine à écrire sur l'axe Y
+            if self.descente_compteur < sprite_size_y:                     # on est descendu jusqu'au bout ?
+                self.rect.y += 1
+                self.descente_compteur += 1
+            else:                                               # on est descendu jusqu'au bout !
+                self.descente_compteur = 0
+                self.descente = False
+        else:                                                   # Déplacement classique sur l'axe X
+            self.rect.x += self.velx
+            if self.rect.x > SCREEN_X-sprite_size_x:
+                self.velx = self.velx*(-1)
+                self.descente = True
+            if self.rect.x < 0:
+                self.velx = self.velx*(-1)
+                self.descente = True
+
+
+
+#-------Etoiles--------------------------------------------------------------------------
 class Etoiles(pygame.sprite.Sprite):
     def __init__(self, width, height, posx, posy, velx):
         super().__init__()
@@ -150,7 +201,7 @@ class Etoiles(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = posx
         self.rect.y = posy
-        self.vely = random.randint(2,3)
+        self.vely = random.randint(1,3)
 
 
     def update(self):       # étoiles vont de droit à gauche pour simuler la vitesse
@@ -158,7 +209,7 @@ class Etoiles(pygame.sprite.Sprite):
         if self.rect.y > SCREEN_Y:     # Etoile sort de l'écran
             self.rect.y = 0                                   # on la replace à l'extreme droite sur l'axe X
             self.rect.x = random.randint(0,SCREEN_X)        # axe x aléatoire
-            self.velx = random.randint(2,3)             # vélocité aléatoire
+            self.velx = random.randint(1,3)             # vélocité aléatoire
 
 
 # ---------------------------------------------------------------------------------------
@@ -188,10 +239,11 @@ def Updateaffichage():
 
     # ici on anime les sprites en image fixe
     all_etoiles.draw(ecran)
+    all_tirs.draw(ecran)
 
     # ici on anime les sprites qui comportent plusieurs images
-    # for enemy in all_enemy:
-    #     enemy.draw()    # appel de la fonction draw dans la classe Stars
+    for enemy in all_enemy:
+        enemy.draw()    # appel de la fonction draw dans la classe Stars
 
     # Affichage Level
     ecrit("Level : ", PINK, 15, 20, 20, "retro")
@@ -219,14 +271,20 @@ def new_level(level):
     all_enemy.empty()
     all_etoiles.empty()
     all_player.empty()
+    all_tirs.empty()
 
-    # Charge ennemies
-    # for i in range(5+level):
-    #     enemy = Enemy("ennemy1 32_32.png",random.randint(100,SCREEN_X-100), random.randint(40,SCREEN_Y-40))     # Fenetre d'apparition des étoiles
-    #     all_enemy.add(enemy)
-    #     all_sprites_list.add(enemy)
+    # Création des ennemies
+    k = 0   # espace Y entre les enemis
+    for j in range(0,3):
+        z = 0   # espace X entre les enemis
+        k += sprite_size_y
+        for i in range (0,13):
+            enemy = Enemy(70 + (i*sprite_size_x)+z,50 + (j*sprite_size_y)+k, random.randint(1,5))     # Fenetre d'apparition des ennemis
+            all_enemy.add(enemy)
+            all_sprites_list.add(enemy)
+            z += sprite_size_x     # espace X entre les enemis
 
-    # charge étoiles
+    # Création des étoiles
     for i in range(100):
         etoiles = Etoiles( 5,5,random.randint(0,SCREEN_X), random.randint(0,SCREEN_Y),3)     # Fenetre d'apparition des étoiles
         all_etoiles.add(etoiles)
@@ -254,6 +312,7 @@ all_sprites_list = pygame.sprite.Group()
 all_enemy = pygame.sprite.Group()
 all_etoiles = pygame.sprite.Group()
 all_player = pygame.sprite.Group()
+all_tirs = pygame.sprite.Group()
 
 new_level(1)
 
@@ -305,4 +364,7 @@ while continuer:
 
             # Espace -> on démarre le jeu
             if event.key == pygame.K_SPACE:
-                start = True
+                print("space")
+                tir = Tir(player_x + int(sprite_size_x/2) - 5,730)
+                all_tirs.add(tir)
+                all_sprites_list.add(tir)
