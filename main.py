@@ -29,8 +29,7 @@ sprite_size_x = 48
 sprite_size_y = 48
 
 
-Num_ecran = 0
-start = False  # on a démarré le jeu ? Non
+Num_ecran = 1   # 0 = In game, 1 = Menu
 score = 0
 level = 1
 
@@ -217,13 +216,13 @@ class Etoiles(pygame.sprite.Sprite):
 def ecrit(texte,col,size, x, y,police):
 
     if police == "":
-        font = pygame.font.Font(None, size)
+        font = pygame.freetype.Font(None, size)
     else:
-        font = pygame.font.Font("Assets/retro.ttf", size)
+        font = pygame.freetype.Font("Assets/retro.ttf", size)
 
+    text_surf2, text_rect2 = font.render(texte,col)     # font.render permet d'avoir une transparence
+    ecran.blit(text_surf2, (x, y))
 
-    text = font.render(texte, True, col, BLACK)
-    ecran.blit(text, (x,y))
 
 #---------------------------------------------------------------------------------
 # -Update affichage graphique during the game-------------------------------------
@@ -248,6 +247,10 @@ def Updateaffichage():
     # Affichage Level
     ecrit("Level : ", PINK, 15, 20, 20, "retro")
     ecrit(str(level), PINK, 15, 120, 20, "retro")
+
+    # Affichage Score
+    ecrit("Score : ", CYAN, 15, SCREEN_X-200, 20, "retro")
+    ecrit(str(score), CYAN, 15, SCREEN_X-100, 20, "retro")
 
 
     # Affichage player
@@ -285,8 +288,8 @@ def new_level(level):
             z += sprite_size_x     # espace X entre les enemis
 
     # Création des étoiles
-    for i in range(100):
-        etoiles = Etoiles( 5,5,random.randint(0,SCREEN_X), random.randint(0,SCREEN_Y),3)     # Fenetre d'apparition des étoiles
+    for i in range(40):
+        etoiles = Etoiles( 3,3,random.randint(0,SCREEN_X), random.randint(0,SCREEN_Y),3)     # Fenetre d'apparition des étoiles
         all_etoiles.add(etoiles)
         all_sprites_list.add(etoiles)
 
@@ -304,7 +307,7 @@ def new_level(level):
 pygame.init()
 size = [SCREEN_X, SCREEN_Y]
 ecran = pygame.display.set_mode(size)
-pygame.display.set_caption("Jerres")
+pygame.display.set_caption("Space Invaders")
 clock = pygame.time.Clock()
 
 # Création des groupes de sprites
@@ -314,9 +317,6 @@ all_etoiles = pygame.sprite.Group()
 all_player = pygame.sprite.Group()
 all_tirs = pygame.sprite.Group()
 
-new_level(1)
-
-Updateaffichage()
 
 continuer = True
 # --------------------------------------------------------------------------------------------
@@ -335,7 +335,26 @@ while continuer:
 
 
     if Num_ecran == 1:  # Ecran de menu
-        pass
+        # affichage de l'écran titre
+        x = ecran.get_size()                            # on récupère la taille de l'écran
+        fond = pygame.image.load("Assets/fond.jpg")     # on charge l'image
+        fond1 = pygame.transform.scale(fond, (x))       # on adapte l'image à la taille de l'écran
+        ecran.blit(fond1, (0, 0))                       # on pose l'image sur ecran
+        ecrit("Space", PINK, 50, 100, 30, "retro")
+        ecrit("Invaders",PINK,50,80,80,"retro")
+        ecrit("A game by YML",PINK,20,80,140,"retro")
+        img = pygame.image.load("Assets/YmCGA.png")  # on charge l'image
+        img1 = pygame.transform.scale(img, (120,160))  # on adapte la taille de l'image
+        ecran.blit(img1, (170, 170))  # on pose l'image sur ecran
+        ecrit("Press", WHITE, 40, 50, 350, "retro")
+        ecrit("SPACE", CYAN, 40, 100, 390, "retro")
+        ecrit("to begin", WHITE, 40, 150, 430, "retro")
+
+
+
+
+
+        pygame.display.update()                         # on affiche le tout
 
 
 
@@ -362,9 +381,14 @@ while continuer:
                 continuer = False
                 pygame.quit()
 
-            # Espace -> on démarre le jeu
+            # Espace -> on démarre le jeu ou on tir si on est déjà in game
             if event.key == pygame.K_SPACE:
-                print("space")
-                tir = Tir(player_x + int(sprite_size_x/2) - 5,730)
-                all_tirs.add(tir)
-                all_sprites_list.add(tir)
+                if Num_ecran == 0:              # on est in game
+                    tir = Tir(player_x + int(sprite_size_x/2) - 5,730)
+                    all_tirs.add(tir)
+                    all_sprites_list.add(tir)
+                if Num_ecran == 1:
+                    new_level(level)
+                    Num_ecran = 0
+                    print("Num ecran : ",Num_ecran)
+                    Updateaffichage()
