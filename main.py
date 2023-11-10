@@ -9,6 +9,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 PINK = (255,85,255)
 CYAN = (85,255,255)
+CGA = [WHITE,CYAN,PINK]  # CGA palette
 
 # Define some other colors
 RED = (255, 0, 0, 0)
@@ -30,8 +31,8 @@ sprite_size_y = 48
 
 
 Num_ecran = 1   # 0 = In game, 1 = Menu
+level = 0
 score = 0
-level = 1
 
 player_x = 0    # variable globale qui enregistre la position du joueur sur l'axe X
 
@@ -76,7 +77,7 @@ class Player(pygame.sprite.Sprite):
         self.posx = int(SCREEN_X/2)
         self.posy = 700
         self.images = []
-        self.animationstep = [2]
+        self.animationstep = [4]
         self.width = sprite_size_x
         self.height = sprite_size_y
         self.imageslist = Load_sheet("Assets/player.png", self.animationstep, sprite_size_x, sprite_size_y)
@@ -88,11 +89,14 @@ class Player(pygame.sprite.Sprite):
         self.frame_max = 2
         self.frame_min = 0
         self.velx = 4
+        self.soucoupe_timer_zone = random.randint(500,1000)  # fenetre d'apparition de la soucoupe
+        self.soucoupe_timer = 0                              # timer
 
 
-    def select_frame(self):
-        self.frame_min = 0
-        self.frame_max = 2
+
+    # def select_frame(self):
+    #     self.frame_min = 0
+    #     self.frame_max = 4
 
     def draw(self):
         self.slowframe += 1
@@ -130,21 +134,47 @@ class Tir(pygame.sprite.Sprite):
         self.rect.y = posy
 
     def update(self):
+        global score
         self.rect.y -= 5
+        # dépassement des limites de l'écran ?
         if self.rect.y < 0:
             self.kill()
+        #collision avec un alien ?
+        collision = pygame.sprite.spritecollide(self, all_enemy, False)
+        if collision:
+            self.kill()                     # on supprime la bullet
+            for enemy in collision:       # on parcourt les ennemis pour savoir lequel est en collision
+                if enemy.explode:
+                    pass
+                else:
+                    score += 100
+                    enemy.explode = True
+                    enemy.frame_min = 10    # frame contenant l'explosion
+                    enemy.frame_max = 21
+                    enemy.frame = enemy.frame_min
+                    # pygame.mixer.Sound.play(tir_son)
 
-#--------Enemies-----------------------------------------------------------------------------------
-class Enemy(pygame.sprite.Sprite):
-    def __init__(self, posx, posy, numero):
+
+#--------gates-----------------------------------------------------------------------------------
+class Gate(pygame.sprite.Sprite):
+    def __init__(self, col, posx, posy):
         super().__init__()
-        self.posx = posx
-        self.posy = posy
+        self.image = pygame.Surface([70, 10])                       # sprite de 10*10 pixels
+        pygame.draw.rect(self.image, col, pygame.Rect(0, 0,70,10)) # sprite de 10*10 pixels
+        self.rect = self.image.get_rect()
+        self.rect.x = posx
+        self.rect.y = posy
+#--------Soucoupe bonus-----------------------------------------------------------------------------------
+class Soucoupe(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.posx = 30
+        self.posy = 30
         self.images = []
         self.animationstep = [2]
         self.width = sprite_size_x
         self.height = sprite_size_y
-        self.imageslist = Load_sheet("Assets/enemy"+str(numero)+".png", self.animationstep, sprite_size_x, sprite_size_y)
+        self.imageslist = Load_sheet("Assets/soucoupe.png", self.animationstep, sprite_size_x, sprite_size_y)
         self.rect = pygame.Rect(self.posx, self.posy, sprite_size_x, sprite_size_y)
         self.rect.x = self.posx
         self.rect.y = self.posy
@@ -152,10 +182,7 @@ class Enemy(pygame.sprite.Sprite):
         self.frame = 0
         self.frame_max = 2
         self.frame_min = 0
-        self.velx = 1
-        self.descente = False
-        self.descente_compteur = 0
-
+        self.velx = 4
 
     def select_frame(self):
         self.frame_min = 0
@@ -170,8 +197,121 @@ class Enemy(pygame.sprite.Sprite):
                 self.frame = self.frame_min
         ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y))
 
+    def update(self):
+        self.rect.x += self.velx
+        if self.rect.x > SCREEN_X:
+            self.kill()
+
+
+#--------bullet-----------------------------------------------------------------------------------
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, posx, posy):
+        super().__init__()
+        self.images = []
+        self.animationstep = [4]
+        self.width = sprite_size_x
+        self.height = sprite_size_y
+        self.imageslist = Load_sheet("Assets/bullet.png", self.animationstep, 7,23)
+        self.rect = pygame.Rect(0, 0, 7,23)
+        self.rect.x = posx
+        self.rect.y = posy
+        self.slowframe = 0
+        self.frame = 0
+        self.frame_max = 4
+        self.frame_min = 0
+        self.vely = 2
+
+    # def select_frame(self):
+    #     self.frame_min = 0
+    #     self.frame_max = 4
+
+    def draw(self):
+        self.slowframe += 1
+        if self.slowframe > 10:
+            self.slowframe = 0
+            self.frame += 1
+            if self.frame == self.frame_max:
+                self.frame = self.frame_min
+        ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y))
+
 
     def update(self):
+        self.rect.y += self.vely
+        # dépassement des limites de l'écran ?
+        if self.rect.y > SCREEN_Y:
+            self.kill()
+
+
+
+
+#--------Enemies-----------------------------------------------------------------------------------
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, posx, posy, numero):
+        super().__init__()
+        self.posx = posx
+        self.posy = posy
+        self.images = []
+        self.animationstep = [2,2,2,2,2,12]
+        self.width = sprite_size_x
+        self.height = sprite_size_y
+        self.imageslist = Load_sheet("Assets/enemis_spritesheet_CGA.png", self.animationstep, sprite_size_x, sprite_size_y)
+        self.rect = pygame.Rect(self.posx, self.posy, sprite_size_x, sprite_size_y)
+        self.rect.x = self.posx
+        self.rect.y = self.posy
+        self.slowframe = 0
+        if numero == 1:
+            self.frame_min = 0
+            self.frame_max = 1
+            self.frame = self.frame_min
+        if numero == 2:
+            self.frame_min = 2
+            self.frame_max = 3
+            self.frame = self.frame_min
+        if numero == 3:
+            self.frame_min = 4
+            self.frame_max = 5
+            self.frame = self.frame_min
+        if numero == 4:
+            self.frame_min = 6
+            self.frame_max = 7
+            self.frame = self.frame_min
+        if numero == 5:
+            self.frame_min = 8
+            self.frame_max = 9
+            self.frame = self.frame_min
+        self.velx = 1
+        self.descente = False
+        self.descente_compteur = 0
+        self.timer = 0
+        self.timer_zone = random.randint(1000,2000)
+        if numero > 3 :             # Seuls certains types d'enemis tirent
+            self.tir = True
+        else:
+            self.tir = False
+        self.explode = False        # pour gérer les explosions
+
+
+
+    # def select_frame(self):
+    #     self.frame_min = 3
+    #     self.frame_max = 5
+
+    def draw(self):
+        self.slowframe += 1
+        if self.slowframe > 10:
+            self.slowframe = 0
+            self.frame += 1
+            if self.frame > self.frame_max:
+                if self.explode:        # on arrive au bout de la boucle de Frames, si on est dans une explosion on kill l'objet
+                    self.frame = self.frame_min # sinon ça bug au moment de l'affichage...
+                    self.kill()
+                else:                   # pas d'explosion, on reprend au début de la boucle de frames
+                    self.frame = self.frame_min
+        ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y)) # affichage
+
+
+    def update(self):
+        # on vérifie si l'alien est en descente ou en déplacement horizontal
         if self.descente:                                       # Descente façon machine à écrire sur l'axe Y
             if self.descente_compteur < sprite_size_y:                     # on est descendu jusqu'au bout ?
                 self.rect.y += 1
@@ -188,15 +328,24 @@ class Enemy(pygame.sprite.Sprite):
                 self.velx = self.velx*(-1)
                 self.descente = True
 
+            # Tir ?
+            if self.tir :           # Tir uniquement si tir = TRUE
+                self.timer += 1
+                if self.timer == self.timer_zone:                   # Tir déclenché
+                    bullet = Bullet(self.rect.x, self.rect.y)       # on crée un objet aux coordonnées de l'alien
+                    all_bullet.add(bullet)
+                    all_sprites_list.add(bullet)
+                    self.timer = 0                                  # on remet à 0 le timer pour déclencher un nouveau tir
+                    self.timer_zone = random.randint(100, 1000)     # délai d'apparition du prochain tir
 
 
 #-------Etoiles--------------------------------------------------------------------------
 class Etoiles(pygame.sprite.Sprite):
     def __init__(self, width, height, posx, posy, velx):
         super().__init__()
-        self.color = [WHITE,CYAN,PINK]  # CGA palette
+        # self.color = [WHITE,CYAN,PINK]  # CGA palette
         self.image = pygame.Surface([width, height])
-        pygame.draw.rect(self.image, self.color[random.randint(0,2)], pygame.Rect(0, 0, width, height))
+        pygame.draw.rect(self.image, CGA[random.randint(0,2)], pygame.Rect(0, 0, width, height))
         self.rect = self.image.get_rect()
         self.rect.x = posx
         self.rect.y = posy
@@ -239,10 +388,17 @@ def Updateaffichage():
     # ici on anime les sprites en image fixe
     all_etoiles.draw(ecran)
     all_tirs.draw(ecran)
+    all_gates.draw(ecran)
 
     # ici on anime les sprites qui comportent plusieurs images
     for enemy in all_enemy:
-        enemy.draw()    # appel de la fonction draw dans la classe Stars
+        enemy.draw()    # appel de la fonction draw dans la classe enemy
+
+    for soucoupe in all_soucoupe:
+        soucoupe.draw()    # appel de la fonction draw dans la classe soucoupe
+
+    for bullet in all_bullet:
+        bullet.draw()    # appel de la fonction draw dans la classe soucoupe
 
     # Affichage Level
     ecrit("Level : ", PINK, 15, 20, 20, "retro")
@@ -275,17 +431,22 @@ def new_level(level):
     all_etoiles.empty()
     all_player.empty()
     all_tirs.empty()
+    all_gates.empty()
+    all_soucoupe.empty()
+    all_bullet.empty()
 
     # Création des ennemies
     k = 0   # espace Y entre les enemis
     for j in range(0,3):
-        z = 0   # espace X entre les enemis
+        z = 0   # espace X entre les ennemis
         k += sprite_size_y
         for i in range (0,13):
-            enemy = Enemy(70 + (i*sprite_size_x)+z,50 + (j*sprite_size_y)+k, random.randint(1,5))     # Fenetre d'apparition des ennemis
+            enemy_type = random.randint(1, 5)                                             # Type d'ennemis : aléatoire
+            # enemy_type = 2                                                                  # Type d'ennemis : 1
+            enemy = Enemy(70 + (i*sprite_size_x)+z,50 + (j*sprite_size_y)+k, enemy_type)    # Création objet ennemi
             all_enemy.add(enemy)
             all_sprites_list.add(enemy)
-            z += sprite_size_x     # espace X entre les enemis
+            z += sprite_size_x     # espace X entre les ennemis
 
     # Création des étoiles
     for i in range(40):
@@ -293,11 +454,54 @@ def new_level(level):
         all_etoiles.add(etoiles)
         all_sprites_list.add(etoiles)
 
+    # Création des gates
+    for i in range(0,4):
+        gate = Gate(CYAN,300 + (i * (sprite_size_x * 5)), 680)      # première ligne de défense
+        all_gates.add(gate)
+        all_sprites_list.add(gate)
+        gate = Gate(WHITE, 300 + (i * (sprite_size_x * 5)), 670)    # seconde ligne de défense
+        all_gates.add(gate)
+        all_sprites_list.add(gate)
+
     # Crée player
     player = Player()
     all_player.add(player)
     all_sprites_list.add(player)
 
+# ----Game--------------------------------------------------------------------------------------------------------------
+def game():
+
+    # apparition soucoupe bonus
+    for player in all_player:                                       # on incrémente le timer soucoupe
+        player.soucoupe_timer += 1
+        if player.soucoupe_timer_zone == player.soucoupe_timer :    # est-ce qu'on est dans la zone d'apparition ?
+            soucoupe = Soucoupe()                           # création soucoupe bonus
+            all_soucoupe.add(soucoupe)
+            all_sprites_list.add(soucoupe)
+            soucoupe_timer_zone = random.randint(500, 1000) # délai avant prochaine soucoupe
+            soucoupe_timer = 0                              # remise à 0 du timer
+
+    # affichage général du jeu
+    Updateaffichage()
+
+# ----Menu-------------------------------------------------
+def menu():
+    # affichage de l'écran titre
+    x = ecran.get_size()  # on récupère la taille de l'écran
+    fond = pygame.image.load("Assets/fond.jpg")  # on charge l'image
+    fond1 = pygame.transform.scale(fond, (x))  # on adapte l'image à la taille de l'écran
+    ecran.blit(fond1, (0, 0))  # on pose l'image sur ecran
+    ecrit("Space", PINK, 50, 100, 30, "retro")
+    ecrit("Invaders", PINK, 50, 80, 80, "retro")
+    ecrit("A game by YML", PINK, 20, 80, 140, "retro")
+    img = pygame.image.load("Assets/YmCGA.png")  # on charge l'image
+    img1 = pygame.transform.scale(img, (120, 160))  # on adapte la taille de l'image
+    ecran.blit(img1, (170, 170))  # on pose l'image sur ecran
+    ecrit("Press", WHITE, 40, 50, 350, "retro")
+    ecrit("SPACE", CYAN, 40, 100, 390, "retro")
+    ecrit("to begin", WHITE, 40, 150, 430, "retro")
+
+    pygame.display.update()  # on affiche le tout
 
 # ----------------------------------------------------------------------------------------------------------------------
 # --------------------------------Programme principal-------------------------------------------------------------------
@@ -316,6 +520,9 @@ all_enemy = pygame.sprite.Group()
 all_etoiles = pygame.sprite.Group()
 all_player = pygame.sprite.Group()
 all_tirs = pygame.sprite.Group()
+all_soucoupe = pygame.sprite.Group()
+all_bullet = pygame.sprite.Group()
+all_gates = pygame.sprite.Group()
 
 
 continuer = True
@@ -329,32 +536,13 @@ while continuer:
     # On rafraichit l'affichage graphique des différents menus
 
     if Num_ecran == 0:  # Ecran in game
-        Updateaffichage()
+        game()
 
         # le jeu a démarré (= joueur a appuyé sur espace ou bouton X) ?
 
 
     if Num_ecran == 1:  # Ecran de menu
-        # affichage de l'écran titre
-        x = ecran.get_size()                            # on récupère la taille de l'écran
-        fond = pygame.image.load("Assets/fond.jpg")     # on charge l'image
-        fond1 = pygame.transform.scale(fond, (x))       # on adapte l'image à la taille de l'écran
-        ecran.blit(fond1, (0, 0))                       # on pose l'image sur ecran
-        ecrit("Space", PINK, 50, 100, 30, "retro")
-        ecrit("Invaders",PINK,50,80,80,"retro")
-        ecrit("A game by YML",PINK,20,80,140,"retro")
-        img = pygame.image.load("Assets/YmCGA.png")  # on charge l'image
-        img1 = pygame.transform.scale(img, (120,160))  # on adapte la taille de l'image
-        ecran.blit(img1, (170, 170))  # on pose l'image sur ecran
-        ecrit("Press", WHITE, 40, 50, 350, "retro")
-        ecrit("SPACE", CYAN, 40, 100, 390, "retro")
-        ecrit("to begin", WHITE, 40, 150, 430, "retro")
-
-
-
-
-
-        pygame.display.update()                         # on affiche le tout
+        menu()
 
 
 
