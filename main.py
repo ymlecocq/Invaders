@@ -31,12 +31,12 @@ sprite_size_y = 48
 
 
 Num_ecran = 1   # 0 = In game, 1 = Menu
-level = 0
+level = 1
 score = 0
 
-player_x = 0    # variable globale qui enregistre la position du joueur sur l'axe X
+player_x = 0    # variable globale qui enregistre la position du joueur sur l'axe X - permet de tirer avec espace
+enemy_velocity = 0
 
-victory = False # le joueur a gagné le level ?
 
 # --------------------------------------------------
 # Fonctions & classes pour charger les sprites
@@ -87,21 +87,16 @@ class Player(pygame.sprite.Sprite):
         self.rect = pygame.Rect(self.posx, self.posy, sprite_size_x, sprite_size_y)
         self.rect.x = self.posx
         self.rect.y = self.posy
-        self.vies = 3               # 3 vies au départ
+        self.vies = 1               # 3 vies au départ
         self.slowframe = 0
         self.frame = 0              # frame qui sera affichée en premier
         self.frame_max = 3          # boucle frame du depart
         self.frame_min = 0          # boucle frame du depart
         self.velx = 4
-        self.soucoupe_timer_zone = random.randint(500,2000)   # fenetre d'apparition de la soucoupe
+        self.soucoupe_timer_zone = random.randint(1000,4000)   # fenetre d'apparition de la soucoupe
         self.soucoupe_timer = 0                                     # timer
         self.explode = False                                        # le joueur explose ?
 
-
-
-    # def select_frame(self):
-    #     self.frame_min = 0
-    #     self.frame_max = 4
 
     def draw(self):
         self.slowframe += 1
@@ -119,7 +114,7 @@ class Player(pygame.sprite.Sprite):
                         self.frame_max = 3
                         self.frame = self.frame_min
                     else:   # plus de vie
-                        exit("MORT")
+                        mort()
         ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y)) # affichage des sprites
         for i in range(0,self.vies):
             ecran.blit(self.image_vie, ((i*24),20))                         # affichage du nombre de vies restantes
@@ -133,11 +128,18 @@ class Player(pygame.sprite.Sprite):
         # Captation des touches du clavier
         pressed_keys = pygame.key.get_pressed()
 
-        if pressed_keys[pygame.K_LEFT]:    # press => : le joueur monte
+        if pressed_keys[pygame.K_LEFT]:    # press <= : le joueur va à gauche
             self.rect.x -= self.velx
-        if pressed_keys[pygame.K_RIGHT]:    # press => : le joueur monte
+        if pressed_keys[pygame.K_RIGHT]:    # press => : le joueur va à droite
             self.rect.x += self.velx
 
+        # player sort de l'écran ?
+        if self.rect.x < 0:
+            self.rect.x = player_x
+        if self.rect.x > SCREEN_X-sprite_size_x:
+            self.rect.x = player_x
+
+        # player explose ?
         if self.explode:
             self.rect.x = player_x  # le joueur est en train d'exploser, il ne bouge plus
 
@@ -155,23 +157,40 @@ class Tir(pygame.sprite.Sprite):
     def update(self):
         global score
         self.rect.y -= 5
+        
         # dépassement des limites de l'écran ?
         if self.rect.y < 0:
             self.kill()
+        
         #collision avec un alien ?
         collision = pygame.sprite.spritecollide(self, all_enemy, False)
         if collision:
             self.kill()                     # on supprime la bullet
-            for enemy in collision:       # on parcourt les ennemis pour savoir lequel est en collision
+            for enemy in collision:         # on parcourt les ennemis pour savoir lequel est en collision
                 if enemy.explode:
                     pass
                 else:
                     score += 100
                     enemy.explode = True
-                    enemy.frame_min = 10    # frame contenant l'explosion
+                    enemy.frame_min = 10    # frame contenant l'explosion de l'alien
                     enemy.frame_max = 21
                     enemy.frame = enemy.frame_min
-                    # pygame.mixer.Sound.play(tir_son)
+                    pygame.mixer.Sound.play(explosion)
+        
+        #collision avec la soucoupe bonus ?
+        collision = pygame.sprite.spritecollide(self, all_soucoupe, False)
+        if collision:
+            self.kill()                     # on supprime la bullet
+            for soucoupe in collision:       # on parcourt les ennemis pour savoir lequel est en collision
+                if soucoupe.explode:
+                    pass
+                else:
+                    score += 1000
+                    soucoupe.explode = True
+                    soucoupe.frame_min = 3    # frame contenant l'explosion
+                    soucoupe.frame_max = 14
+                    soucoupe.frame = soucoupe.frame_min
+                    pygame.mixer.Sound.play(explosion)
 
 
 #--------gates-----------------------------------------------------------------------------------
@@ -183,6 +202,23 @@ class Gate(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = posx
         self.rect.y = posy
+
+    def update(self):
+        global score
+        # collision avec un alien ?
+        collision = pygame.sprite.spritecollide(self, all_enemy, False)
+        if collision:
+            self.kill()  # on supprime la gate
+            for enemy in collision:  # on parcourt les ennemis pour savoir lequel est en collision
+                if enemy.explode:
+                    pass
+                else:
+                    score += 100
+                    enemy.explode = True
+                    enemy.frame_min = 10  # frame contenant l'explosion de l'alien
+                    enemy.frame_max = 21
+                    enemy.frame = enemy.frame_min
+                    pygame.mixer.Sound.play(explosion)
 #--------Soucoupe bonus-----------------------------------------------------------------------------------
 class Soucoupe(pygame.sprite.Sprite):
     def __init__(self):
@@ -190,7 +226,7 @@ class Soucoupe(pygame.sprite.Sprite):
         self.posx = 30
         self.posy = 30
         self.images = []
-        self.animationstep = [2]
+        self.animationstep = [3,12]
         self.width = sprite_size_x
         self.height = sprite_size_y
         self.imageslist = Load_sheet("Assets/soucoupe.png", self.animationstep, sprite_size_x, sprite_size_y)
@@ -202,10 +238,7 @@ class Soucoupe(pygame.sprite.Sprite):
         self.frame_max = 2
         self.frame_min = 0
         self.velx = 4
-
-    def select_frame(self):
-        self.frame_min = 0
-        self.frame_max = 2
+        self.explode = False
 
     def draw(self):
         self.slowframe += 1
@@ -213,13 +246,17 @@ class Soucoupe(pygame.sprite.Sprite):
             self.slowframe = 0
             self.frame += 1
             if self.frame == self.frame_max:
+                if self.explode:
+                    self.frame = self.frame_min
+                    self.kill()
                 self.frame = self.frame_min
         ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y))
 
     def update(self):
-        self.rect.x += self.velx
-        if self.rect.x > SCREEN_X:
-            self.kill()
+        if self.explode == False:
+            self.rect.x += self.velx
+            if self.rect.x > SCREEN_X:
+                self.kill()
 
 
 #--------bullet des aliens-----------------------------------------------------------------------------------
@@ -267,9 +304,11 @@ class Bullet(pygame.sprite.Sprite):
                     player.frame_min = 4    # frame contenant l'explosion
                     player.frame_max = 15
                     player.frame = player.frame_min
+                    pygame.mixer.Sound.play(explosion)
                     for bullet in all_bullet:
                         bullet.kill()   # on supprime toute les bullets
                     # pygame.mixer.Sound.play(tir_son)
+
         # collision avec une gate ? si oui on suppr directement la gate et après la bullet
         collision = pygame.sprite.spritecollide(self, all_gates, True)        # collision avec une gate ? true = kill gate
         if collision:
@@ -278,7 +317,7 @@ class Bullet(pygame.sprite.Sprite):
 
 #--------Enemies-----------------------------------------------------------------------------------
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, posx, posy, numero):
+    def __init__(self, posx, posy, numero, vitesse):
         super().__init__()
         self.posx = posx
         self.posy = posy
@@ -311,18 +350,20 @@ class Enemy(pygame.sprite.Sprite):
             self.frame_min = 8
             self.frame_max = 9
             self.frame = self.frame_min
-        self.velx = 1
+        self.velx = vitesse     # vitesse
+        self.vitesse_max = 5    # vitesse max
         self.descente = False
         self.descente_compteur = 0
         self.timer = 0
-        self.timer_zone = random.randint(1,20)
-        if numero > 3 :             # Seuls certains types d'enemis tirent
+        self.timer_zone = random.randint(100,2000)
+        if numero > 3 :             # Seuls certains types d'ennemis tirent
             self.tir = True
         else:
             self.tir = False
         self.explode = False        # pour gérer les explosions
 
     def draw(self):
+        global enemy_velocity
         self.slowframe += 1
         if self.slowframe > 10:
             self.slowframe = 0
@@ -331,8 +372,20 @@ class Enemy(pygame.sprite.Sprite):
                 if self.explode:        # on arrive au bout de la boucle de Frames, si on est dans une explosion on kill l'objet
                     self.frame = self.frame_min # sinon ça bug au moment de l'affichage...
                     self.kill()         # on supprime l'objet alien
-                    if len(all_enemy) == 0:
-                        gagne()         # Plus d'enemis : appel de la procédure gagne
+                    # on accélère la vitesse de tous les ennemis restants
+                    for enemy in all_enemy:
+                        if enemy.velx > 0:
+                            enemy.velx += 0.2
+                            if enemy.velx > enemy.vitesse_max :     # vitesse max atteinte ?
+                                enemy.velx = enemy.vitesse_max
+                        else:
+                            enemy.velx -= 0.2
+                            if enemy.velx < (enemy.vitesse_max*(-1)):      # vitesse max atteinte ?
+                                enemy.velx = (enemy.vitesse_max*(-1))
+                    # encore des ennemis ?
+                    if len(all_enemy) == 0:     # Plus d'ennemis, affichage message victoire et changement de niveau
+                        Num_ecran = 3
+                        aff_victoire()
                 else:                   # pas d'explosion, on reprend au début de la boucle de frames
                     self.frame = self.frame_min
         ecran.blit(self.imageslist[self.frame], (self.rect.x, self.rect.y)) # affichage
@@ -355,6 +408,20 @@ class Enemy(pygame.sprite.Sprite):
             if self.rect.x < 0:
                 self.velx = self.velx*(-1)
                 self.descente = True
+
+            # collision avec le joueur ?
+            collision = pygame.sprite.spritecollide(self, all_player, False)  # collision avec le joueur ?
+            if collision:
+                self.kill()  # on supprime l'alien
+                for player in collision:  # on parcourt les sprites du joueur pour savoir lequel est en collision
+                    if player.explode:  # le jouer est en train d'exploser, pas besoin d'en faire plus
+                        pass
+                    else:  # le joueur explose
+                        player.explode = True
+                        player.frame_min = 4  # frame contenant l'explosion
+                        player.frame_max = 15
+                        player.frame = player.frame_min
+                        pygame.mixer.Sound.play(explosion)
 
             # L'alien tire ?
             if self.tir :           # Tir uniquement si tir = TRUE
@@ -388,24 +455,6 @@ class Etoiles(pygame.sprite.Sprite):
             self.velx = random.randint(1,3)             # vélocité aléatoire
 
 
-#-----Victoire----------------------------------------------------------------------------------
-class Victoire(pygame.sprite.Sprite):
-    def __init__(self, width, height, posx, posy):
-        super().__init__()
-        # chargement image victoire
-        self.image_victory = pygame.image.load("Assets/YMCGA.png").convert_alpha()
-        self.rect = pygame.Rect(posx,posy, width, height)
-        self.rect.x = posx
-        self.rect.y = posy
-
-    def update(self):       # étoiles vont de droit à gauche pour simuler la vitesse
-        self.rect.y += 3
-
-    def draw(self):
-        ecran.blit(self.image_victory, (self.rect.x, self.rect.y))  # affichage
-
-
-
 #----Fonction pour écrire à l'écran-------------------------------------------------------------
 def ecrit(texte,col,size, x, y,police):
 
@@ -434,9 +483,6 @@ def Updateaffichage():
     all_etoiles.draw(ecran)
     all_tirs.draw(ecran)
     all_gates.draw(ecran)
-    # si le joueur a complété le level, on affiche le sprite de la victoire
-    if victory:
-        all_victory.draw(ecran)
 
     # ici on anime les sprites qui comportent plusieurs images
     for enemy in all_enemy:
@@ -462,12 +508,93 @@ def Updateaffichage():
 
     clock.tick(100)
 
+
 #---------------------------------------------------------------------------------
-def gagne():
-    global level,victory
-    level += 1
-    victory = True
+# Quand c'est le game over / Affichage du high score en attendant que press space
+def aff_mort():
+    # appel de la fonction update de l'ensemble des objets (quand ils en ont une)
+    all_sprites_list.update()  # Appelle la fonction update de chaque groupe de sprite
+
+    # efface l'écran
+    ecran.fill(BLACK)
+
+    # Affichage des différents groupes de sprites
+    # ici on anime les sprites en image fixe
+    all_etoiles.draw(ecran)
+
+    ecrit("Game Over", PINK, 50, SCREEN_X / 2 - 150, 150, "retro")
+
+    ecrit("High", CYAN, 30, int(SCREEN_X/2) - 100, 250, "retro")
+    ecrit("Scores", WHITE, 30, SCREEN_X - int(SCREEN_X/2) + 50, 300, "retro")
+
+    pygame.display.flip()
+
+    clock.tick(100)
+
+# ---------------------------------------------------------------------------------
+# Quand c'est le game over / Animation du texte
+def mort():
+    global level, Num_ecran
+    Num_ecran = 3
+    # on charge la musique du menu dans music_menu
+    pygame.mixer.music.load("Assets/" + musique_mort)
+    # on joue en boucle la musique "music" du menu
+    pygame.mixer.music.play(1)
+    i = 0
+    while i < int(SCREEN_X/2):
+        # appel de la fonction update de l'ensemble des objets (quand ils en ont une)
+        all_sprites_list.update()  # Appelle la fonction update de chaque groupe de sprite
+
+        # efface l'écran
+        ecran.fill(BLACK)
+
+        # Affichage des différents groupes de sprites
+        # ici on anime les sprites en image fixe
+        all_etoiles.draw(ecran)
+
+        ecrit("Game Over",PINK,50,SCREEN_X/2 - 150,150,"retro")
+
+        ecrit("High",CYAN,30, i-100,250,"retro")
+        ecrit("Scores", WHITE, 30, SCREEN_X - i + 50, 300, "retro")
+
+        pygame.display.flip()
+
+        clock.tick(100)
+
+        i += 5
+
+    level = 1
     new_level(level)
+    Num_ecran = 3   # Ecran Mort
+#---------------------------------------------------------------------------------
+def aff_victoire():
+    global level,Num_ecran
+
+    i = 0
+    while i < SCREEN_X + 200:
+        # appel de la fonction update de l'ensemble des objets (quand ils en ont une)
+        all_sprites_list.update()  # Appelle la fonction update de chaque groupe de sprite
+
+        # efface l'écran
+        ecran.fill(BLACK)
+
+        # Affichage des différents groupes de sprites
+        # ici on anime les sprites en image fixe
+        all_etoiles.draw(ecran)
+
+        ecrit("Une nouvelle vague arrive",PINK,50,i-150,150,"retro")
+
+        pygame.display.flip()
+
+        clock.tick(100)
+
+        i += 5
+
+    level += 1
+    new_level(level)
+
+    Num_ecran = 0   # retour in game
+
 # -----------------------------------------------------
 def new_level(level):
     # Nettoyage des groupes de sprites
@@ -481,14 +608,14 @@ def new_level(level):
     all_bullet.empty()
 
     # Création des ennemies
-    k = 0   # espace Y entre les enemis
+    k = 0   # espace Y entre les ennemis
     for j in range(0,3):
         z = 0   # espace X entre les ennemis
         k += sprite_size_y
-        for i in range (0,2):   # 13 en temps normal
-            enemy_type = random.randint(1, 5)                                             # Type d'ennemis : aléatoire
+        for i in range (0,13):   # rangée de 13 ennemis
+            enemy_type = random.randint(1, 5)                                             # Type d'ennemis : aléatoire 1 a 5
             # enemy_type = 2                                                                  # Type d'ennemis : 1
-            enemy = Enemy(70 + (i*sprite_size_x)+z,50 + (j*sprite_size_y)+k, enemy_type)    # Création objet ennemi
+            enemy = Enemy(70 + (i*sprite_size_x)+z,50 + (j*sprite_size_y)+k, enemy_type, 1)   # Création objet ennemi / 1 = vitesse des ennemis
             all_enemy.add(enemy)
             all_sprites_list.add(enemy)
             z += sprite_size_x     # espace X entre les ennemis
@@ -514,7 +641,7 @@ def new_level(level):
     all_sprites_list.add(player)
 
 
-# ----Game--------------------------------------------------------------------------------------------------------------
+# ----Fonction Game : principale fonction qui gère les évènements liés au jeu-----------------------------------------
 def game():
 
     # apparition soucoupe bonus
@@ -524,8 +651,12 @@ def game():
             soucoupe = Soucoupe()                                   # création soucoupe bonus
             all_soucoupe.add(soucoupe)
             all_sprites_list.add(soucoupe)
-            soucoupe_timer_zone = random.randint(500, 1000)   # délai avant prochaine soucoupe
-            soucoupe_timer = 0                                      # remise à 0 du timer
+            player.soucoupe_timer_zone = random.randint(1000, 4000)             # délai avant prochaine soucoupe
+            player.soucoupe_timer = 0                                      # remise à 0 du timer
+
+    # vitesse des ennemis
+    # if len(all)
+    # for enemy in all_enemy:
 
 
     # affichage général du jeu
@@ -561,6 +692,9 @@ ecran = pygame.display.set_mode(size)
 pygame.display.set_caption("Space Invaders")
 clock = pygame.time.Clock()
 
+# souris non visible
+pygame.mouse.set_visible(False)
+
 # Création des groupes de sprites
 all_sprites_list = pygame.sprite.Group()
 all_enemy = pygame.sprite.Group()
@@ -570,11 +704,18 @@ all_tirs = pygame.sprite.Group()
 all_soucoupe = pygame.sprite.Group()
 all_bullet = pygame.sprite.Group()
 all_gates = pygame.sprite.Group()
-all_victory = pygame.sprite.Group()
 
-victoire = Victoire(301,396,200,50)   # création du sprite victoire
-all_victory.add(victoire)
-all_sprites_list.add((victoire))
+# Chargement des sons
+musique_menu = "Dido.mid"
+musique_mort = "mort.mid"
+explosion = pygame.mixer.Sound("Assets/explosion.wav")
+# tir_son = pygame.mixer.Sound("Assets/tir.wav")
+
+# on charge la musique du menu dans music_menu
+pygame.mixer.music.load("Assets/"+musique_menu)
+
+# on joue en boucle la musique  "music" du menu
+pygame.mixer.music.play(-1)
 
 continuer = True
 # --------------------------------------------------------------------------------------------
@@ -589,12 +730,14 @@ while continuer:
     if Num_ecran == 0:  # Ecran in game
         game()
 
-        # le jeu a démarré (= joueur a appuyé sur espace ou bouton X) ?
-
-
     if Num_ecran == 1:  # Ecran de menu
         menu()
 
+    if Num_ecran == 2:  # Ecran Passage d'un level
+        aff_victoire()
+
+    if Num_ecran == 3:  # on affiche l'écran mort avec les scores
+        aff_mort()
 
 
 
@@ -626,7 +769,14 @@ while continuer:
                     tir = Tir(player_x + int(sprite_size_x/2) - 5,730)
                     all_tirs.add(tir)
                     all_sprites_list.add(tir)
-                if Num_ecran == 1:              # on est dans le menu
+                if Num_ecran == 1:              # on est dans le menu et space lance le jeu
+                    pygame.mixer.music.stop()   # stop la musique
                     new_level(level)
                     Num_ecran = 0
+                    Updateaffichage()
+                if Num_ecran == 3:              # on affiche l'écran mort avec les scores et space lance le menu
+                    pygame.mixer.music.load("Assets/" + musique_menu)   # Lecture de la musique
+                    pygame.mixer.music.play(-1)                         # en boucle
+                    new_level(level)
+                    Num_ecran = 1
                     Updateaffichage()
